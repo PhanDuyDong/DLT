@@ -13,12 +13,13 @@ function App() {
     title: '',
     type: 'food',
     description: '',
-    date: new Date().toISOString().split('T')[0], // Lưu dưới dạng string
+    date: new Date().toISOString().split('T')[0],
     images: []
   });
   const [editingId, setEditingId] = useState(null);
   const [isOnline, setIsOnline] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
 
   const eventTypes = {
     food: { icon: Utensils, label: 'Ăn uống', color: '#f43f5e' },
@@ -30,11 +31,9 @@ function App() {
   useEffect(() => {
     const eventsRef = ref(database, 'events');
     
-    // Lắng nghe thay đổi dữ liệu realtime
     const unsubscribe = onValue(eventsRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        // Chuyển đổi object thành array
         const loadedEvents = Object.entries(data).map(([key, value]) => ({
           id: key,
           ...value,
@@ -52,9 +51,137 @@ function App() {
       setLoading(false);
     });
 
-    // Cleanup subscription
     return () => unsubscribe();
   }, []);
+
+  // Hàm nén ảnh cho mobile
+  const compressImage = (file) => {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      
+      img.onload = () => {
+        try {
+          // Tính toán kích thước mới (giữ tỷ lệ)
+          const maxWidth = 800;
+          const maxHeight = 600;
+          let { width, height } = img;
+          
+          if (width > height) {
+            if (width > maxWidth) {
+              height = (height * maxWidth) / width;
+              width = maxWidth;
+            }
+          } else {
+            if (height > maxHeight) {
+              width = (width * maxHeight) / height;
+              height = maxHeight;
+            }
+          }
+          
+          // Vẽ ảnh lên canvas với kích thước mới
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Chuyển canvas thành blob với chất lượng nén
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                // Kiểm tra kích thước sau nén
+                if (blob.size > 500000) {
+                  // Nén thêm nếu vẫn quá lớn
+                  canvas.toBlob(
+                    (compressedBlob) => {
+                      resolve(compressedBlob || blob);
+                    },
+                    'image/jpeg',
+                    0.6
+                  );
+                } else {
+                  resolve(blob);
+                }
+              } else {
+                reject(new Error('Không thể nén ảnh'));
+              }
+            },
+            'image/jpeg',
+            0.8
+          );
+        } catch (error) {
+          reject(error);
+        }
+      };
+      
+      img.onerror = () => {
+        reject(new Error('Không thể load ảnh'));
+      };
+      
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
+  const handleImageUpload = async (e, isForEvent = false) => {
+    const files = Array.from(e.target.files);
+    
+    if (files.length === 0) return;
+
+    setUploading(true);
+
+    for (const file of files) {
+      try {
+        // Kiểm tra định dạng file
+        if (!file.type.startsWith('image/')) {
+          alert('Vui lòng chọn file ảnh!');
+          continue;
+        }
+
+        console.log('Original file size:', file.size, 'bytes');
+
+        // Nén ảnh trước khi upload
+        const compressedFile = await compressImage(file);
+        console.log('Compressed file size:', compressedFile.size, 'bytes');
+        
+        const reader = new FileReader();
+        reader.onload = async (readerEvent) => {
+          try {
+            const base64Image = readerEvent.target.result;
+            
+            if (isForEvent && showEventDetail) {
+              // Cập nhật ảnh cho event hiện tại
+              const updatedImages = [...(showEventDetail.images || []), base64Image];
+              const eventRef = ref(database, `events/${showEventDetail.id}`);
+              await update(eventRef, { images: updatedImages });
+              setShowEventDetail({ ...showEventDetail, images: updatedImages });
+            } else {
+              // Thêm ảnh vào form event mới
+              setNewEvent(prev => ({ 
+                ...prev, 
+                images: [...(prev.images || []), base64Image] 
+              }));
+            }
+          } catch (error) {
+            console.error('Error updating event with image:', error);
+            alert('Lỗi khi lưu ảnh!');
+          }
+        };
+
+        reader.onerror = () => {
+          alert('Lỗi khi đọc file ảnh!');
+        };
+
+        reader.readAsDataURL(compressedFile);
+      } catch (error) {
+        console.error('Error processing image:', error);
+        alert('Lỗi khi xử lý ảnh: ' + error.message);
+      }
+    }
+    
+    setUploading(false);
+    // Reset input để có thể chọn lại cùng file
+    e.target.value = '';
+  };
 
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
@@ -88,17 +215,15 @@ function App() {
       try {
         const eventData = {
           ...newEvent,
-          date: newEvent.date, // Đã là string
+          date: newEvent.date,
           images: newEvent.images || []
         };
 
         if (editingId) {
-          // Cập nhật event
           const eventRef = ref(database, `events/${editingId}`);
           await update(eventRef, eventData);
           setEditingId(null);
         } else {
-          // Thêm event mới
           const eventsRef = ref(database, 'events');
           await push(eventsRef, eventData);
         }
@@ -116,37 +241,6 @@ function App() {
         console.error('Error saving event:', error);
         alert('Lỗi khi lưu sự kiện. Vui lòng thử lại!');
       }
-    }
-  };
-
-  const handleImageUpload = async (e, isForEvent = false) => {
-    const files = Array.from(e.target.files);
-    
-    // Giới hạn kích thước file
-    const maxSize = 500000; // 500KB
-    
-    for (const file of files) {
-      if (file.size > maxSize) {
-        alert('Hình ảnh quá lớn! Vui lòng chọn hình nhỏ hơn 500KB.');
-        continue;
-      }
-      
-      const reader = new FileReader();
-      reader.onload = async (readerEvent) => {
-        const base64Image = readerEvent.target.result;
-        
-        if (isForEvent && showEventDetail) {
-          // Cập nhật ảnh cho event hiện tại
-          const updatedImages = [...(showEventDetail.images || []), base64Image];
-          const eventRef = ref(database, `events/${showEventDetail.id}`);
-          await update(eventRef, { images: updatedImages });
-          setShowEventDetail({ ...showEventDetail, images: updatedImages });
-        } else {
-          // Thêm ảnh vào form event mới
-          setNewEvent({ ...newEvent, images: [...(newEvent.images || []), base64Image] });
-        }
-      };
-      reader.readAsDataURL(file);
     }
   };
 
@@ -174,13 +268,21 @@ function App() {
   };
 
   const removeImage = async (index, isForEvent = false) => {
-    if (isForEvent && showEventDetail) {
-      const updatedImages = showEventDetail.images.filter((_, i) => i !== index);
-      const eventRef = ref(database, `events/${showEventDetail.id}`);
-      await update(eventRef, { images: updatedImages });
-      setShowEventDetail({ ...showEventDetail, images: updatedImages });
-    } else {
-      setNewEvent({ ...newEvent, images: newEvent.images.filter((_, i) => i !== index) });
+    try {
+      if (isForEvent && showEventDetail) {
+        const updatedImages = showEventDetail.images.filter((_, i) => i !== index);
+        const eventRef = ref(database, `events/${showEventDetail.id}`);
+        await update(eventRef, { images: updatedImages });
+        setShowEventDetail({ ...showEventDetail, images: updatedImages });
+      } else {
+        setNewEvent(prev => ({ 
+          ...prev, 
+          images: prev.images.filter((_, i) => i !== index) 
+        }));
+      }
+    } catch (error) {
+      console.error('Error removing image:', error);
+      alert('Lỗi khi xóa ảnh!');
     }
   };
 
@@ -271,7 +373,7 @@ function App() {
                 <div key={day} className={`calendar-day ${isToday ? 'today' : ''}`}>
                   <div className="day-number">{day}</div>
                   <div className="events-list">
-                    {dayEvents.map(event => {
+                    {dayEvents.slice(0, 2).map(event => {
                       const EventIcon = eventTypes[event.type].icon;
                       return (
                         <div
@@ -280,11 +382,14 @@ function App() {
                           className="event-badge"
                           style={{ backgroundColor: eventTypes[event.type].color }}
                         >
-                          <EventIcon size={12} />
+                          <EventIcon size={10} />
                           <span>{event.title}</span>
                         </div>
                       );
                     })}
+                    {dayEvents.length > 2 && (
+                      <div className="more-events">+{dayEvents.length - 2}</div>
+                    )}
                   </div>
                 </div>
               );
@@ -331,6 +436,7 @@ function App() {
                   {Object.entries(eventTypes).map(([key, { icon: Icon, label, color }]) => (
                     <button
                       key={key}
+                      type="button"
                       onClick={() => setNewEvent({ ...newEvent, type: key })}
                       className={`type-btn ${newEvent.type === key ? 'active' : ''}`}
                       style={newEvent.type === key ? { backgroundColor: color, color: 'white' } : {}}
@@ -362,18 +468,21 @@ function App() {
               </div>
 
               <div className="form-group">
-                <label>Hình ảnh (Max: 500KB/ảnh)</label>
+                <label>Hình ảnh</label>
+                
                 <input
                   type="file"
                   accept="image/*"
                   multiple
+                  capture="environment"
                   onChange={(e) => handleImageUpload(e, false)}
                   className="file-input"
                   id="image-upload"
+                  disabled={uploading}
                 />
                 <label htmlFor="image-upload" className="file-label">
                   <Camera size={20} />
-                  Thêm ảnh kỷ niệm
+                  {uploading ? 'Đang xử lý...' : 'Chụp ảnh hoặc chọn từ thư viện'}
                 </label>
                 
                 {newEvent.images && newEvent.images.length > 0 && (
@@ -381,17 +490,30 @@ function App() {
                     {newEvent.images.map((img, idx) => (
                       <div key={idx} className="image-item">
                         <img src={img} alt="" />
-                        <button onClick={() => removeImage(idx, false)} className="remove-image">
+                        <button 
+                          type="button"
+                          onClick={() => removeImage(idx, false)} 
+                          className="remove-image"
+                          disabled={uploading}
+                        >
                           <X size={12} />
                         </button>
                       </div>
                     ))}
                   </div>
                 )}
+                
+                <div className="upload-info">
+                  <span>Ảnh sẽ được tự động nén để tối ưu tốc độ</span>
+                </div>
               </div>
 
-              <button onClick={handleAddEvent} className="btn-submit">
-                {editingId ? 'Cập Nhật' : 'Thêm Kế Hoạch'}
+              <button 
+                onClick={handleAddEvent} 
+                className="btn-submit"
+                disabled={uploading}
+              >
+                {uploading ? 'Đang xử lý...' : (editingId ? 'Cập Nhật' : 'Thêm Kế Hoạch')}
               </button>
             </div>
           </div>
@@ -414,13 +536,25 @@ function App() {
                 </div>
               </div>
               <div className="detail-actions">
-                <button onClick={() => handleEditEvent(showEventDetail)} className="action-btn">
+                <button 
+                  onClick={() => handleEditEvent(showEventDetail)} 
+                  className="action-btn"
+                  type="button"
+                >
                   <Edit2 size={20} style={{ color: '#3b82f6' }} />
                 </button>
-                <button onClick={() => handleDeleteEvent(showEventDetail.id)} className="action-btn">
+                <button 
+                  onClick={() => handleDeleteEvent(showEventDetail.id)} 
+                  className="action-btn"
+                  type="button"
+                >
                   <Trash2 size={20} style={{ color: '#ef4444' }} />
                 </button>
-                <button onClick={() => setShowEventDetail(null)} className="action-btn">
+                <button 
+                  onClick={() => setShowEventDetail(null)} 
+                  className="action-btn"
+                  type="button"
+                >
                   <X size={24} />
                 </button>
               </div>
@@ -442,13 +576,15 @@ function App() {
                   type="file"
                   accept="image/*"
                   multiple
+                  capture="environment"
                   onChange={(e) => handleImageUpload(e, true)}
                   className="file-input"
                   id="event-image-upload"
+                  disabled={uploading}
                 />
                 <label htmlFor="event-image-upload" className="add-image-link">
                   <Plus size={16} />
-                  Thêm ảnh
+                  {uploading ? 'Đang xử lý...' : 'Thêm ảnh'}
                 </label>
               </div>
               
@@ -457,7 +593,12 @@ function App() {
                   {showEventDetail.images.map((img, idx) => (
                     <div key={idx} className="image-item">
                       <img src={img} alt="" />
-                      <button onClick={() => removeImage(idx, true)} className="remove-image">
+                      <button 
+                        onClick={() => removeImage(idx, true)} 
+                        className="remove-image"
+                        type="button"
+                        disabled={uploading}
+                      >
                         <X size={16} />
                       </button>
                     </div>
