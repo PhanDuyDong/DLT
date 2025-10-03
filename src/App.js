@@ -54,7 +54,7 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // Hàm nén ảnh cho mobile
+  // Hàm nén ảnh cho mobile (Đã tối ưu để có thể bỏ qua bước nén 2 lần nếu cần)
   const compressImage = (file) => {
     return new Promise((resolve, reject) => {
       const canvas = document.createElement('canvas');
@@ -85,19 +85,18 @@ function App() {
           canvas.height = height;
           ctx.drawImage(img, 0, 0, width, height);
           
-          // Chuyển canvas thành blob với chất lượng nén
+          // Chuyển canvas thành blob với chất lượng nén 0.8 (Tốt cho chất lượng và dung lượng)
           canvas.toBlob(
             (blob) => {
               if (blob) {
-                // Kiểm tra kích thước sau nén
-                if (blob.size > 500000) {
-                  // Nén thêm nếu vẫn quá lớn
+                // Logic nén lại nếu vẫn quá lớn (giữ lại để tối ưu dung lượng)
+                if (blob.size > 500000) { 
                   canvas.toBlob(
                     (compressedBlob) => {
                       resolve(compressedBlob || blob);
                     },
                     'image/jpeg',
-                    0.6
+                    0.6 // Giảm chất lượng nén lần 2
                   );
                 } else {
                   resolve(blob);
@@ -115,67 +114,74 @@ function App() {
       };
       
       img.onerror = () => {
-        reject(new Error('Không thể load ảnh'));
+        reject(new Error('Không thể load ảnh. Ảnh có thể không hợp lệ (như định dạng HEIC không được hỗ trợ đầy đủ)'));
       };
       
       img.src = URL.createObjectURL(file);
     });
   };
 
+  // Hàm xử lý upload ảnh (Đã sửa lỗi logic bất đồng bộ và tối ưu cho Firebase)
   const handleImageUpload = async (e, isForEvent = false) => {
     const files = Array.from(e.target.files);
     
     if (files.length === 0) return;
 
     setUploading(true);
+    const uploadedImages = [];
+    const targetId = isForEvent ? showEventDetail?.id : null;
 
     for (const file of files) {
-      try {
-        // Kiểm tra định dạng file
-        if (!file.type.startsWith('image/')) {
-          alert('Vui lòng chọn file ảnh!');
-          continue;
-        }
-
-        console.log('Original file size:', file.size, 'bytes');
-
-        // Nén ảnh trước khi upload
-        const compressedFile = await compressImage(file);
-        console.log('Compressed file size:', compressedFile.size, 'bytes');
-        
-        const reader = new FileReader();
-        reader.onload = async (readerEvent) => {
-          try {
-            const base64Image = readerEvent.target.result;
-            
-            if (isForEvent && showEventDetail) {
-              // Cập nhật ảnh cho event hiện tại
-              const updatedImages = [...(showEventDetail.images || []), base64Image];
-              const eventRef = ref(database, `events/${showEventDetail.id}`);
-              await update(eventRef, { images: updatedImages });
-              setShowEventDetail({ ...showEventDetail, images: updatedImages });
-            } else {
-              // Thêm ảnh vào form event mới
-              setNewEvent(prev => ({ 
-                ...prev, 
-                images: [...(prev.images || []), base64Image] 
-              }));
+        try {
+            // Kiểm tra định dạng file
+            if (!file.type.startsWith('image/')) {
+                alert('Vui lòng chọn file ảnh!');
+                continue;
             }
-          } catch (error) {
-            console.error('Error updating event with image:', error);
-            alert('Lỗi khi lưu ảnh!');
-          }
-        };
 
-        reader.onerror = () => {
-          alert('Lỗi khi đọc file ảnh!');
-        };
+            console.log('Original file size:', file.size, 'bytes');
 
-        reader.readAsDataURL(compressedFile);
-      } catch (error) {
-        console.error('Error processing image:', error);
-        alert('Lỗi khi xử lý ảnh: ' + error.message);
-      }
+            // 1. Nén ảnh: Chờ hàm nén hoàn tất
+            const compressedFile = await compressImage(file);
+            console.log('Compressed file size:', compressedFile.size, 'bytes');
+            
+            // 2. Đọc file Blob đã nén thành Base64
+            const base64Image = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (readerEvent) => resolve(readerEvent.target.result);
+                reader.onerror = () => reject(new Error('Lỗi khi đọc file ảnh.'));
+                reader.readAsDataURL(compressedFile); // Đọc Blob đã nén
+            });
+            
+            uploadedImages.push(base64Image);
+
+        } catch (error) {
+            console.error('Error processing image:', error);
+            alert('Lỗi khi xử lý ảnh. Vui lòng thử lại với ảnh JPEG/PNG khác hoặc định dạng HEIC đã được chuyển đổi: ' + error.message);
+        }
+    }
+    
+    // 3. Cập nhật State và Firebase sau khi tất cả các file đã được xử lý
+    if (uploadedImages.length > 0) {
+        try {
+            if (isForEvent && targetId) {
+                // Cập nhật ảnh cho event hiện tại
+                const updatedImages = [...(showEventDetail.images || []), ...uploadedImages];
+                const eventRef = ref(database, `events/${targetId}`);
+                await update(eventRef, { images: updatedImages });
+                // Cập nhật local state (showEventDetail) để hiển thị ngay lập tức
+                setShowEventDetail(prev => prev ? { ...prev, images: updatedImages } : null);
+            } else {
+                // Thêm ảnh vào form event mới
+                setNewEvent(prev => ({ 
+                    ...prev, 
+                    images: [...(prev.images || []), ...uploadedImages] 
+                }));
+            }
+        } catch (error) {
+            console.error('Error updating event with images:', error);
+            alert('Lỗi khi lưu ảnh lên Firebase!');
+        }
     }
     
     setUploading(false);
@@ -183,13 +189,15 @@ function App() {
     e.target.value = '';
   };
 
+
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
-    const startingDayOfWeek = firstDay.getDay();
+    // getDay() trả về 0 cho Chủ Nhật, 1 cho Thứ Hai, ...
+    const startingDayOfWeek = firstDay.getDay(); 
     
     return { daysInMonth, startingDayOfWeek };
   };
@@ -215,7 +223,7 @@ function App() {
       try {
         const eventData = {
           ...newEvent,
-          date: newEvent.date,
+          // Đảm bảo images luôn là mảng, ngay cả khi undefined
           images: newEvent.images || []
         };
 
@@ -260,6 +268,7 @@ function App() {
   const handleEditEvent = (event) => {
     setNewEvent({
       ...event,
+      // Khi edit, event.date là object Date, cần chuyển lại string cho input type="date"
       date: event.date.toISOString().split('T')[0]
     });
     setEditingId(event.id);
@@ -277,7 +286,7 @@ function App() {
       } else {
         setNewEvent(prev => ({ 
           ...prev, 
-          images: prev.images.filter((_, i) => i !== index) 
+          images: (prev.images || []).filter((_, i) => i !== index) 
         }));
       }
     } catch (error) {
@@ -327,9 +336,22 @@ function App() {
           <div className="header-content">
             <div className="header-title">
               <Heart className="heart-icon" size={32} />
-              <h1>Lịch Hẹn Hò Của Chúng Ta</h1>
+              <h1>Lịch Hẹn Hò Của Đông và Tâm Tâm</h1>
             </div>
-            <button onClick={() => setShowModal(true)} className="btn-add">
+            <button 
+                onClick={() => {
+                    setEditingId(null);
+                    setNewEvent({ 
+                        title: '', 
+                        type: 'food', 
+                        description: '', 
+                        date: new Date().toISOString().split('T')[0],
+                        images: [] 
+                    });
+                    setShowModal(true);
+                }} 
+                className="btn-add"
+            >
               <Plus size={20} />
               Thêm Kế Hoạch
             </button>
@@ -374,13 +396,14 @@ function App() {
                   <div className="day-number">{day}</div>
                   <div className="events-list">
                     {dayEvents.slice(0, 2).map(event => {
-                      const EventIcon = eventTypes[event.type].icon;
+                      const EventIcon = eventTypes[event.type]?.icon || Heart;
+                      const eventColor = eventTypes[event.type]?.color || '#94a3b8';
                       return (
                         <div
                           key={event.id}
                           onClick={() => setShowEventDetail(event)}
                           className="event-badge"
-                          style={{ backgroundColor: eventTypes[event.type].color }}
+                          style={{ backgroundColor: eventColor }}
                         >
                           <EventIcon size={10} />
                           <span>{event.title}</span>
@@ -388,7 +411,15 @@ function App() {
                       );
                     })}
                     {dayEvents.length > 2 && (
-                      <div className="more-events">+{dayEvents.length - 2}</div>
+                      <div 
+                        className="more-events"
+                        onClick={() => {
+                            // Mở chi tiết sự kiện đầu tiên để xem tất cả
+                            if (dayEvents.length > 0) setShowEventDetail(dayEvents[0]);
+                        }}
+                      >
+                        +{dayEvents.length - 2}
+                      </div>
                     )}
                   </div>
                 </div>
@@ -474,7 +505,8 @@ function App() {
                   type="file"
                   accept="image/*"
                   multiple
-                  capture="environment"
+                  // Hỗ trợ chụp ảnh trực tiếp trên mobile
+                  capture="environment" 
                   onChange={(e) => handleImageUpload(e, false)}
                   className="file-input"
                   id="image-upload"
@@ -511,7 +543,7 @@ function App() {
               <button 
                 onClick={handleAddEvent} 
                 className="btn-submit"
-                disabled={uploading}
+                disabled={uploading || !newEvent.title.trim()}
               >
                 {uploading ? 'Đang xử lý...' : (editingId ? 'Cập Nhật' : 'Thêm Kế Hoạch')}
               </button>
@@ -526,9 +558,10 @@ function App() {
           <div className="modal-content detail-modal">
             <div className="detail-header">
               <div className="detail-title">
-                {React.createElement(eventTypes[showEventDetail.type].icon, { 
+                {/* Sử dụng optional chaining để tránh lỗi nếu event.type không hợp lệ */}
+                {React.createElement(eventTypes[showEventDetail.type]?.icon || Heart, { 
                   size: 32,
-                  style: { color: eventTypes[showEventDetail.type].color }
+                  style: { color: eventTypes[showEventDetail.type]?.color || '#94a3b8' }
                 })}
                 <div>
                   <h3>{showEventDetail.title}</h3>
@@ -588,7 +621,7 @@ function App() {
                 </label>
               </div>
               
-              {showEventDetail.images && showEventDetail.images.length > 0 ? (
+              {(showEventDetail.images && showEventDetail.images.length > 0) ? (
                 <div className="image-grid large">
                   {showEventDetail.images.map((img, idx) => (
                     <div key={idx} className="image-item">
