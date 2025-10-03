@@ -1,0 +1,136 @@
+.calendar-day {
+  aspect-ratio: 1;
+  border: 1px solid #f3f4f6;
+  border-radius: 10px;
+  padding: 4px;
+  transition: all 0.3s;
+  position: relative;
+  min-height: 50px;
+  max-height: 70px;
+  cursor: pointer;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.calendar-day:hover, .calendar-day:active {
+  border-color: #fca5a5;
+  background: #fffafa;
+  box-shadow: 0 4px 8px rgba(253, 164, 175, 0.2);
+}
+
+.calendar-day.today {
+  border-color: #f43f5e;
+  background: #ffe4e6;
+  border-width: 2px;
+  box-shadow: 0 0 0 1px #f43f5e50;
+}
+
+.calendar-day.empty {
+  border: none;
+  cursor: default;
+  background: transparent;
+}
+
+.calendar-day.empty:hover {
+  background: transparent;
+}
+
+.day-number {
+  font-weight: 700;
+  color: #374151;
+  margin-bottom: 2px;
+  font-size: 12px;
+  text-align: right;
+  padding-right: 4px;
+  line-height: 1;
+}
+
+.events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  height: calc(100% - 18px);
+  overflow: hidden;
+  padding-left: 1px;
+  padding-right: 1px;
+}
+
+.event-badge {
+  color: white;
+  font-size: 9px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.2s;
+  min-height: 16px;
+  max-height: 16px;
+  overflow: hidden;
+  font-weight: 500;
+}
+
+.event-badge:hover, .event-badge:active {
+  opacity: 0.9;
+  transform: scale(1.03);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.event-badge span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  font-size: 9px;
+  line-height: 1;
+}
+
+.more-events {
+  font-size: 8px;
+  color: #f43f5e;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  padding: 1px 4px;
+  border-radius: 4px;
+  text-align: center;
+  margin-top: 1px;
+  font-weight: 600;
+}
+
+@media (min-width: 768px) {
+  .calendar-day {
+    min-height: 90px;
+    max-height: 100px;
+    padding: 8px;
+    border-radius: 12px;
+  }
+
+  .day-number {
+    font-size: 15px;
+  }
+
+  .events-list {
+    gap: 3px;
+    height: calc(100% - 22px);
+  }
+
+  .event-badge {
+    font-size: 10px;
+    padding: 3px 6px;
+    min-height: 18px;
+    max-height: 18px;
+  }
+
+  .event-badge span {
+    font-size: 10px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .calendar-day:hover {
+    border-color: #ff7190;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 15px rgba(253, 164, 175, 0.3);
+  }
+}

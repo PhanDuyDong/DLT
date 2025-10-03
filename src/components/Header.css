@@ -1,0 +1,96 @@
+.header-card {
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 8px 25px rgba(244, 63, 94, 0.05), 0 2px 5px rgba(0, 0, 0, 0.05);
+  padding: 16px;
+  margin-bottom: 16px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Decorative hearts in header */
+.header-card::before {
+  content: '💝';
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  font-size: 80px;
+  opacity: 0.08;
+  transform: rotate(15deg);
+  pointer-events: none;
+}
+
+.header-card::after {
+  content: '🎀';
+  position: absolute;
+  bottom: -5px;
+  left: -5px;
+  font-size: 50px;
+  opacity: 0.1;
+  transform: rotate(-20deg);
+  pointer-events: none;
+}
+
+.header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.heart-icon {
+  color: #f43f5e;
+  fill: #f43f5e;
+}
+
+.header-title h1 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.btn-add {
+  background: linear-gradient(145deg, #ff7190 0%, #f43f5e 50%, #ec4899 100%);
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 25px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  min-height: 40px;
+  white-space: nowrap;
+}
+
+.btn-add:hover, .btn-add:active {
+  box-shadow: 0 8px 20px rgba(244, 63, 94, 0.4);
+  transform: translateY(-2px);
+}
+
+@media (min-width: 768px) {
+  .header-card {
+    padding: 32px;
+    margin-bottom: 24px;
+    border-radius: 24px;
+  }
+
+  .header-title h1 {
+    font-size: 32px;
+  }
+
+  .btn-add {
+    padding: 12px 28px;
+    font-size: 16px;
+  }
+}
