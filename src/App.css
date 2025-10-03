@@ -283,8 +283,7 @@ body {
   max-height: 16px;
   overflow: hidden;
   font-weight: 500;
-  /* Thêm gradient nhẹ cho badge */
-  background: linear-gradient(90deg, var(--badge-color-start, #f43f5e) 0%, var(--badge-color-end, #ec4899) 100%);
+
 }
 
 /* Custom background for specific event types (using a temporary CSS Variable approach) */
