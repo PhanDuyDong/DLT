@@ -501,16 +501,16 @@ function App() {
               <div className="form-group">
                 <label>Hình ảnh</label>
                 
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  // Hỗ trợ chụp ảnh trực tiếp trên mobile
-                  onChange={(e) => handleImageUpload(e, false)}
-                  className="file-input"
-                  id="image-upload"
-                  disabled={uploading}
-                />
+<input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  // Bỏ thuộc tính `capture` để iOS/Android tự động hiển thị menu chọn: Chụp ảnh VÀ Thư viện
+                  onChange={(e) => handleImageUpload(e, false)}
+                  className="file-input"
+                  id="image-upload"
+                  disabled={uploading}
+                />
                 <label htmlFor="image-upload" className="file-label">
                   <Camera size={20} />
                   {uploading ? 'Đang xử lý...' : 'Chụp ảnh hoặc chọn từ thư viện'}
@@ -604,16 +604,16 @@ function App() {
                   <Camera size={20} />
                   Ảnh Kỷ Niệm ({showEventDetail.images ? showEventDetail.images.length : 0})
                 </h4>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  capture="environment"
-                  onChange={(e) => handleImageUpload(e, true)}
-                  className="file-input"
-                  id="event-image-upload"
-                  disabled={uploading}
-                />
+<input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  // Bỏ thuộc tính `capture` để iOS/Android tự động hiển thị menu chọn: Chụp ảnh VÀ Thư viện
+                  onChange={(e) => handleImageUpload(e, true)}
+                  className="file-input"
+                  id="event-image-upload"
+                  disabled={uploading}
+                />
                 <label htmlFor="event-image-upload" className="add-image-link">
                   <Plus size={16} />
                   {uploading ? 'Đang xử lý...' : 'Thêm ảnh'}
