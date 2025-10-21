@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Heart, X, Edit2, Trash2, Camera, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import './EventDetail.css';
 
@@ -14,30 +14,90 @@ function EventDetail({
 }) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [touchStart, setTouchStart] = useState(0);
+  const [touchEnd, setTouchEnd] = useState(0);
+  const [scale, setScale] = useState(1);
+  const imageRef = useRef(null);
   
   const EventIcon = eventTypes[event.type]?.icon || Heart;
   const eventColor = eventTypes[event.type]?.color || '#94a3b8';
   
+  const minSwipeDistance = 50;
+  
   const openLightbox = (index) => {
     setCurrentImageIndex(index);
     setLightboxOpen(true);
+    setScale(1);
+    // Ngăn scroll body khi mở lightbox
+    document.body.style.overflow = 'hidden';
   };
   
   const closeLightbox = () => {
     setLightboxOpen(false);
+    setScale(1);
+    // Cho phép scroll lại
+    document.body.style.overflow = '';
   };
   
   const nextImage = () => {
     setCurrentImageIndex((prev) => 
       prev === event.images.length - 1 ? 0 : prev + 1
     );
+    setScale(1);
   };
   
   const prevImage = () => {
     setCurrentImageIndex((prev) => 
       prev === 0 ? event.images.length - 1 : prev - 1
     );
+    setScale(1);
   };
+  
+  // Touch handlers cho swipe
+  const onTouchStart = (e) => {
+    setTouchEnd(0);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+  
+  const onTouchMove = (e) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+  
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+    
+    if (isLeftSwipe && event.images.length > 1) {
+      nextImage();
+    }
+    if (isRightSwipe && event.images.length > 1) {
+      prevImage();
+    }
+  };
+  
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!lightboxOpen) return;
+      
+      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'ArrowLeft') prevImage();
+      if (e.key === 'ArrowRight') nextImage();
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxOpen, currentImageIndex]);
+  
+  // Cleanup khi unmount
+  useEffect(() => {
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, []);
 
   return (
     <div className="modal-overlay">
@@ -144,15 +204,30 @@ function EventDetail({
               </>
             )}
             
-            <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
-              <img 
-                src={event.images[currentImageIndex]} 
-                alt=""
-                className="lightbox-image"
-              />
-              <div className="lightbox-counter">
-                {currentImageIndex + 1} / {event.images.length}
+            <div 
+              className="lightbox-content" 
+              onClick={(e) => e.stopPropagation()}
+              onTouchStart={onTouchStart}
+              onTouchMove={onTouchMove}
+              onTouchEnd={onTouchEnd}
+            >
+              <div className="lightbox-image-container">
+                <img 
+                  ref={imageRef}
+                  src={event.images[currentImageIndex]} 
+                  alt=""
+                  className="lightbox-image"
+                  style={{
+                    transform: `scale(${scale})`,
+                    transition: scale === 1 ? 'transform 0.3s ease' : 'none'
+                  }}
+                />
               </div>
+              {event.images.length > 1 && (
+                <div className="lightbox-counter">
+                  {currentImageIndex + 1} / {event.images.length}
+                </div>
+              )}
             </div>
           </div>
         )}
