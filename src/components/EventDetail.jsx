@@ -1,19 +1,43 @@
-import React from 'react';
-import { Heart, X, Edit2, Trash2, Camera, Plus } from 'lucide-react';
+import React, { useState } from 'react';
+import { Heart, X, Edit2, Trash2, Camera, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import './EventDetail.css';
 
-function EventDetail({ 
-  event, 
-  eventTypes, 
-  onClose, 
-  onEdit, 
-  onDelete, 
-  onImageUpload, 
+function EventDetail({
+  event,
+  eventTypes,
+  onClose,
+  onEdit,
+  onDelete,
+  onImageUpload,
   onRemoveImage,
-  uploading 
+  uploading
 }) {
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  
   const EventIcon = eventTypes[event.type]?.icon || Heart;
   const eventColor = eventTypes[event.type]?.color || '#94a3b8';
+  
+  const openLightbox = (index) => {
+    setCurrentImageIndex(index);
+    setLightboxOpen(true);
+  };
+  
+  const closeLightbox = () => {
+    setLightboxOpen(false);
+  };
+  
+  const nextImage = () => {
+    setCurrentImageIndex((prev) => 
+      prev === event.images.length - 1 ? 0 : prev + 1
+    );
+  };
+  
+  const prevImage = () => {
+    setCurrentImageIndex((prev) => 
+      prev === 0 ? event.images.length - 1 : prev - 1
+    );
+  };
 
   return (
     <div className="modal-overlay">
@@ -65,14 +89,18 @@ function EventDetail({
               {uploading ? 'Đang xử lý...' : 'Thêm ảnh'}
             </label>
           </div>
-          
+         
           {(event.images && event.images.length > 0) ? (
             <div className="image-grid large">
               {event.images.map((img, idx) => (
                 <div key={idx} className="image-item">
-                  <img src={img} alt="" />
-                  <button 
-                    onClick={() => onRemoveImage(idx, true)} 
+                  <img 
+                    src={img} 
+                    alt="" 
+                    onClick={() => openLightbox(idx)}
+                  />
+                  <button
+                    onClick={() => onRemoveImage(idx, true)}
                     className="remove-image"
                     type="button"
                     disabled={uploading}
@@ -89,6 +117,45 @@ function EventDetail({
             </div>
           )}
         </div>
+
+        {/* Lightbox Viewer */}
+        {lightboxOpen && event.images && (
+          <div className="lightbox-overlay" onClick={closeLightbox}>
+            <button className="lightbox-close" onClick={closeLightbox} type="button">
+              <X size={32} />
+            </button>
+            
+            {event.images.length > 1 && (
+              <>
+                <button 
+                  className="lightbox-nav lightbox-prev" 
+                  onClick={(e) => { e.stopPropagation(); prevImage(); }}
+                  type="button"
+                >
+                  <ChevronLeft size={32} />
+                </button>
+                <button 
+                  className="lightbox-nav lightbox-next" 
+                  onClick={(e) => { e.stopPropagation(); nextImage(); }}
+                  type="button"
+                >
+                  <ChevronRight size={32} />
+                </button>
+              </>
+            )}
+            
+            <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
+              <img 
+                src={event.images[currentImageIndex]} 
+                alt=""
+                className="lightbox-image"
+              />
+              <div className="lightbox-counter">
+                {currentImageIndex + 1} / {event.images.length}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
